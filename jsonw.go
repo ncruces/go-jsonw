@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"io"
+	"strconv"
 )
 
 // Writer writes JSON values to an output stream.
@@ -84,8 +85,18 @@ func (j *Writer) Value(v interface{}) error {
 	return j.err
 }
 
+// Int writes an int value to the stream.
+// Returns the first serialization error, or (at top level) io error, found.
+// Panics if a name is expected.
+func (j *Writer) Int(i int) error {
+	j.startValue()
+	j.w.WriteString(strconv.Itoa(i))
+	j.endValue()
+	return j.err
+}
+
 // Name writes a name to the stream.
-// Returns this Writer.
+// Returns this Writer, so you can fluently add the value.
 // Panics if a value is expected.
 func (j *Writer) Name(n string) *Writer {
 	if j.state != name {
@@ -96,11 +107,7 @@ func (j *Writer) Name(n string) *Writer {
 	} else {
 		j.comma = true
 	}
-	buf, err := json.Marshal(n)
-	if err != nil {
-		panic(err)
-	}
-	j.w.Write(buf)
+	j.writeString(n)
 	j.w.WriteByte(':')
 	j.state = value
 	return j
@@ -136,4 +143,27 @@ func (j *Writer) endValue() {
 			j.err = err
 		}
 	}
+}
+
+func (j *Writer) writeString(s string) {
+	for i := 0; i < len(s); i++ {
+		if c := s[i]; false ||
+			c < ' ' || c > '~' || // not printable ASCII
+			c == '"' || c == '\\' || // need escape (JSON)
+			c == '<' || c == '>' || c == '&' { // need escape (HTML/XML)
+
+			// slow path
+			buf, err := json.Marshal(s)
+			if err != nil {
+				panic(err)
+			}
+			j.w.Write(buf)
+			return
+		}
+	}
+
+	// fast path
+	j.w.WriteByte('"')
+	j.w.WriteString(s)
+	j.w.WriteByte('"')
 }
