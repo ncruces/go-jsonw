@@ -2,20 +2,26 @@
 package jsonw
 
 import (
-	"bufio"
 	"encoding/json"
 	"io"
 	"strconv"
 )
 
-// Writer writes JSON values to an output stream.
-type Writer struct {
+type jsonw struct {
 	depth int   // nesting level
 	comma bool  // comma before value/name?
 	state state // next expected token
 	err   error // first error
+}
 
-	w *bufio.Writer
+type writer interface {
+	io.Writer
+	io.ByteWriter
+	io.StringWriter
+}
+
+type flusher interface {
+	Flush() error
 }
 
 type state byte
@@ -26,18 +32,9 @@ const (
 	value              // a value in name/value pair
 )
 
-// New returns a new JSON Writer that writes to w.
-func New(w io.Writer) *Writer {
-	return &Writer{w: bufio.NewWriter(w)}
-}
-
-// Object writes an object (a set of name/value pairs) to the stream.
-// Writes within f will be nested in the object.
-// Returns the first serialization error, or (at top level) io error, found.
-// Panics if a name is expected.
-func (j *Writer) Object(f func()) error {
-	j.startValue()
-	j.w.WriteByte('{')
+func (j *jsonw) object(w writer, f func()) error {
+	j.startValue(w)
+	w.WriteByte('{')
 	s := j.state
 	j.state = name
 	j.comma = false
@@ -46,18 +43,14 @@ func (j *Writer) Object(f func()) error {
 	j.depth--
 	j.state = s
 	j.comma = true
-	j.w.WriteByte('}')
-	j.endValue()
+	w.WriteByte('}')
+	j.endValue(w)
 	return j.err
 }
 
-// Array writes an array (an ordered collection of values) to the stream.
-// Writes within f will be nested in the array.
-// Returns the first serialization error, or (at top level) io error, found.
-// Panics if a name is expected.
-func (j *Writer) Array(f func()) error {
-	j.startValue()
-	j.w.WriteByte('[')
+func (j *jsonw) array(w writer, f func()) error {
+	j.startValue(w)
+	w.WriteByte('[')
 	s := j.state
 	j.state = item
 	j.comma = false
@@ -66,54 +59,44 @@ func (j *Writer) Array(f func()) error {
 	j.depth--
 	j.state = s
 	j.comma = true
-	j.w.WriteByte(']')
-	j.endValue()
+	w.WriteByte(']')
+	j.endValue(w)
 	return j.err
 }
 
-// Value writes a value to the stream.
-// Returns the first serialization error, or (at top level) io error, found.
-// Panics if a name is expected.
-func (j *Writer) Value(v interface{}) error {
-	j.startValue()
+func (j *jsonw) value(w writer, v interface{}) error {
+	j.startValue(w)
 	buf, err := json.Marshal(v)
 	if j.err == nil {
 		j.err = err
 	}
-	j.w.Write(buf)
-	j.endValue()
+	w.Write(buf)
+	j.endValue(w)
 	return j.err
 }
 
-// Int writes an int value to the stream.
-// Returns the first serialization error, or (at top level) io error, found.
-// Panics if a name is expected.
-func (j *Writer) Int(i int) error {
-	j.startValue()
-	j.w.WriteString(strconv.Itoa(i))
-	j.endValue()
+func (j *jsonw) int(w writer, i int) error {
+	j.startValue(w)
+	w.WriteString(strconv.Itoa(i))
+	j.endValue(w)
 	return j.err
 }
 
-// Name writes a name to the stream.
-// Returns this Writer, so you can fluently add the value.
-// Panics if a value is expected.
-func (j *Writer) Name(n string) *Writer {
+func (j *jsonw) name(w writer, n string) {
 	if j.state != name {
 		panic("expected a value, not a name")
 	}
 	if j.comma {
-		j.w.WriteByte(',')
+		w.WriteByte(',')
 	} else {
 		j.comma = true
 	}
-	j.writeString(n)
-	j.w.WriteByte(':')
+	j.writeString(w, n)
+	w.WriteByte(':')
 	j.state = value
-	return j
 }
 
-func (j *Writer) startValue() {
+func (j *jsonw) startValue(w writer) {
 	if j.state == name {
 		panic("expected a name, not a value")
 	}
@@ -121,13 +104,13 @@ func (j *Writer) startValue() {
 		return
 	}
 	if j.comma {
-		j.w.WriteByte(',')
+		w.WriteByte(',')
 	} else {
 		j.comma = true
 	}
 }
 
-func (j *Writer) endValue() {
+func (j *jsonw) endValue(w writer) {
 	if j.state == name {
 		panic("expected a name, not a value")
 	}
@@ -137,15 +120,17 @@ func (j *Writer) endValue() {
 	}
 	if j.depth == 0 {
 		j.comma = false
-		j.w.WriteByte('\n')
-		err := j.w.Flush()
-		if j.err == nil {
-			j.err = err
+		w.WriteByte('\n')
+		if f, ok := w.(flusher); ok {
+			err := f.Flush()
+			if j.err == nil {
+				j.err = err
+			}
 		}
 	}
 }
 
-func (j *Writer) writeString(s string) {
+func (j *jsonw) writeString(w writer, s string) {
 	for i := 0; i < len(s); i++ {
 		if c := s[i]; false ||
 			c < ' ' || c > '~' || // not printable ASCII
@@ -157,13 +142,13 @@ func (j *Writer) writeString(s string) {
 			if err != nil {
 				panic(err)
 			}
-			j.w.Write(buf)
+			w.Write(buf)
 			return
 		}
 	}
 
 	// fast path
-	j.w.WriteByte('"')
-	j.w.WriteString(s)
-	j.w.WriteByte('"')
+	w.WriteByte('"')
+	w.WriteString(s)
+	w.WriteByte('"')
 }
