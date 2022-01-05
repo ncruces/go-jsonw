@@ -39,6 +39,13 @@ func (w *Writer) Value(v interface{}) error {
 	return w.value(w.w, v)
 }
 
+// Value writes a value to the writer.
+// Returns the first serialization error, or (at top level) io error, found.
+// Panics if a name is expected.
+func (w *Writer) Values(v ...interface{}) error {
+	return w.value(w.w, v)
+}
+
 // Int writes an int value to the writer.
 // Returns the first serialization error, or (at top level) io error, found.
 // Panics if a name is expected.

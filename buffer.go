@@ -2,12 +2,9 @@ package jsonw
 
 import (
 	"bytes"
-	"io"
 )
 
 // Buffer writes JSON values to a buffer.
-// Buffer implements io.Reader, io.WriterTo, json.Marshaler and fmt.Stringer
-// by reading back the written JSON.
 // The zero value for Buffer is an empty buffer ready to use.
 type Buffer struct {
 	b bytes.Buffer
@@ -19,6 +16,9 @@ type Buffer struct {
 // Returns the first serialization error found.
 // Panics if a name is expected.
 func (b *Buffer) Object(f func()) error {
+	if b.depth == 0 {
+		b.Reset()
+	}
 	return b.object(&b.b, f)
 }
 
@@ -27,6 +27,9 @@ func (b *Buffer) Object(f func()) error {
 // Returns the first serialization error found.
 // Panics if a name is expected.
 func (b *Buffer) Array(f func()) error {
+	if b.depth == 0 {
+		b.Reset()
+	}
 	return b.array(&b.b, f)
 }
 
@@ -34,6 +37,19 @@ func (b *Buffer) Array(f func()) error {
 // Returns the first serialization error found.
 // Panics if a name is expected.
 func (b *Buffer) Value(v interface{}) error {
+	if b.depth == 0 {
+		b.Reset()
+	}
+	return b.value(&b.b, v)
+}
+
+// Values writes an array of values to the buffer.
+// Returns the first serialization error found.
+// Panics if a name is expected.
+func (b *Buffer) Values(v ...interface{}) error {
+	if b.depth == 0 {
+		b.Reset()
+	}
 	return b.value(&b.b, v)
 }
 
@@ -41,6 +57,9 @@ func (b *Buffer) Value(v interface{}) error {
 // Returns the first serialization error found.
 // Panics if a name is expected.
 func (b *Buffer) Int(i int) error {
+	if b.depth == 0 {
+		b.Reset()
+	}
 	return b.int(&b.b, i)
 }
 
@@ -52,42 +71,32 @@ func (b *Buffer) Name(n string) *Buffer {
 	return b
 }
 
-// Read reads the contents of the buffer into p.
-// Implements io.Reader.
-// Panics if a value is being written.
-func (b *Buffer) Read(p []byte) (n int, err error) {
-	if b.depth != 0 {
-		panic("value is incomplete")
-	}
-	return b.b.Read(p)
-}
-
-// WriteTo writes the contents of the buffer into w.
-// Implements io.WriterTo.
-// Panics if a value is being written.
-func (b *Buffer) WriteTo(w io.Writer) (n int64, err error) {
-	if b.depth != 0 {
-		panic("value is incomplete")
-	}
-	return b.b.WriteTo(w)
-}
-
-// String returns the contents of the unread portion of the buffer as a string.
-// Panics if a value is being written.
+// String returns the last written JSON value as a string.
+// Panics if the value has not been fully written.
 func (b *Buffer) String() string {
 	if b.depth != 0 {
-		panic("value is incomplete")
+		panic("value not fully written")
 	}
 	return b.b.String()
 }
 
-// MarshalJSON returns the contents of the unread portion of the buffer
-// as the JSON encoding of b.
+// String returns the last written JSON value as a byte slice.
+// The returned slice is valid only until the next buffer modification.
+// Panics if the value has not been fully written.
+func (b *Buffer) Bytes() []byte {
+	if b.depth != 0 {
+		panic("value not fully written")
+	}
+	return b.b.Bytes()
+}
+
+// MarshalJSON returns the last written JSON value as the JSON encoding of b.
+// The returned slice is valid only until the next buffer modification.
 // If the buffer is empty, returns null.
-// Panics if a value is being written.
+// Panics if the value has not been fully written.
 func (b *Buffer) MarshalJSON() ([]byte, error) {
 	if b.depth != 0 {
-		panic("value is incomplete")
+		panic("value not fully written")
 	}
 	if b.b.Len() == 0 {
 		return []byte("null"), nil

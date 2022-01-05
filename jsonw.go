@@ -2,6 +2,7 @@
 package jsonw
 
 import (
+	"bufio"
 	"encoding/json"
 	"io"
 	"strconv"
@@ -18,10 +19,6 @@ type writer interface {
 	io.Writer
 	io.ByteWriter
 	io.StringWriter
-}
-
-type flusher interface {
-	Flush() error
 }
 
 type state byte
@@ -120,8 +117,8 @@ func (j *jsonw) endValue(w writer) {
 	}
 	if j.depth == 0 {
 		j.comma = false
-		w.WriteByte('\n')
-		if f, ok := w.(flusher); ok {
+		if f, ok := w.(*bufio.Writer); ok {
+			w.WriteByte('\n')
 			err := f.Flush()
 			if j.err == nil {
 				j.err = err
