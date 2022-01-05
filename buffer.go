@@ -5,7 +5,10 @@ import (
 	"io"
 )
 
-// Buffer writes JSON values to an internal buffer.
+// Buffer writes JSON values to a buffer.
+// Buffer implements io.Reader, io.WriterTo, json.Marshaler and fmt.Stringer
+// by reading back the written JSON.
+// The zero value for Buffer is an empty buffer ready to use.
 type Buffer struct {
 	b bytes.Buffer
 	jsonw
@@ -49,9 +52,9 @@ func (b *Buffer) Name(n string) *Buffer {
 	return b
 }
 
-// Read reads the JSON contents of the buffer into p.
+// Read reads the contents of the buffer into p.
 // Implements io.Reader.
-// Panics if the value is incomplete.
+// Panics if a value is being written.
 func (b *Buffer) Read(p []byte) (n int, err error) {
 	if b.depth != 0 {
 		panic("value is incomplete")
@@ -59,9 +62,9 @@ func (b *Buffer) Read(p []byte) (n int, err error) {
 	return b.b.Read(p)
 }
 
-// WriteTo writes the JSON contents of the buffer into w.
+// WriteTo writes the contents of the buffer into w.
 // Implements io.WriterTo.
-// Panics if the value is incomplete.
+// Panics if a value is being written.
 func (b *Buffer) WriteTo(w io.Writer) (n int64, err error) {
 	if b.depth != 0 {
 		panic("value is incomplete")
@@ -69,13 +72,27 @@ func (b *Buffer) WriteTo(w io.Writer) (n int64, err error) {
 	return b.b.WriteTo(w)
 }
 
-// String returns the JSON contents of the unread portion of the buffer as a string.
-// Panics if the value is incomplete.
+// String returns the contents of the unread portion of the buffer as a string.
+// Panics if a value is being written.
 func (b *Buffer) String() string {
 	if b.depth != 0 {
 		panic("value is incomplete")
 	}
 	return b.b.String()
+}
+
+// MarshalJSON returns the contents of the unread portion of the buffer
+// as the JSON encoding of b.
+// If the buffer is empty, returns null.
+// Panics if a value is being written.
+func (b *Buffer) MarshalJSON() ([]byte, error) {
+	if b.depth != 0 {
+		panic("value is incomplete")
+	}
+	if b.b.Len() == 0 {
+		return []byte("null"), nil
+	}
+	return b.b.Bytes(), nil
 }
 
 // Reset resets the buffer to be empty.

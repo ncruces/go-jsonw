@@ -9,7 +9,7 @@ import (
 func ExampleBuffer() {
 	var jb jsonw.Buffer
 	jb.Object(func() {
-		jb.Name("ID").Value(1)
+		jb.Name("ID").Int(1)
 		jb.Name("Name").Value("Reds")
 		jb.Name("Colors").Value([]string{"Crimson", "Red", "Ruby", "Maroon"})
 	})
