@@ -43,7 +43,7 @@ func (b *Buffer) Value(v interface{}) error {
 	return b.value(&b.b, v)
 }
 
-// Values writes an array of values to the buffer.
+// Values writes an array (an ordered collection) of values to the buffer.
 // Returns the first serialization error found.
 // Panics if a name is expected.
 func (b *Buffer) Values(v ...interface{}) error {
