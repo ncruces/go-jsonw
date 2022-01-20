@@ -77,6 +77,9 @@ func (b *Buffer) String() string {
 	if b.depth != 0 {
 		panic("value not fully written")
 	}
+	if b.err != nil {
+		panic(b.err)
+	}
 	return b.b.String()
 }
 
@@ -86,6 +89,9 @@ func (b *Buffer) String() string {
 func (b *Buffer) Bytes() []byte {
 	if b.depth != 0 {
 		panic("value not fully written")
+	}
+	if b.err != nil {
+		panic(b.err)
 	}
 	return b.b.Bytes()
 }
@@ -97,6 +103,9 @@ func (b *Buffer) Bytes() []byte {
 func (b *Buffer) MarshalJSON() ([]byte, error) {
 	if b.depth != 0 {
 		panic("value not fully written")
+	}
+	if b.err != nil {
+		return nil, b.err
 	}
 	if b.b.Len() == 0 {
 		return []byte("null"), nil
