@@ -128,19 +128,15 @@ func (j *jsonw) endValue(w writer) {
 }
 
 func (j *jsonw) writeString(w writer, s string) {
+	if len(s) > 64 {
+		goto slow
+	}
 	for i := 0; i < len(s); i++ {
 		if c := s[i]; false ||
 			c < ' ' || c > '~' || // not printable ASCII
 			c == '"' || c == '\\' || // need escape (JSON)
 			c == '<' || c == '>' || c == '&' { // need escape (HTML/XML)
-
-			// slow path
-			buf, err := json.Marshal(s)
-			if err != nil {
-				panic(err)
-			}
-			w.Write(buf)
-			return
+			goto slow
 		}
 	}
 
@@ -148,4 +144,13 @@ func (j *jsonw) writeString(w writer, s string) {
 	w.WriteByte('"')
 	w.WriteString(s)
 	w.WriteByte('"')
+	return
+
+slow:
+	// slow path
+	buf, err := json.Marshal(s)
+	if err != nil {
+		panic(err)
+	}
+	w.Write(buf)
 }
